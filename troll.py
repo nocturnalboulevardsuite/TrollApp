@@ -164,23 +164,32 @@ components.html(
         if (req) req.call(el).catch(() => {});
         startFan();
 
-        let p = 0;
+        // Linea de tiempo [segundos, porcentaje]. Total ~60s, ritmo escalado:
+        // lento y pegajoso al principio, con tirones rapidos despues.
+        const wp = [
+          [0, 0], [2, 1], [12, 2], [17, 3], [22, 4], [32, 6],
+          [38, 8], [44, 10], [45, 15], [50, 20], [52, 45],
+          [55, 70], [58, 92], [60, 100]
+        ];
+        const start = performance.now();
         const iv = setInterval(() => {
-          let step;
-          if (p < 20)      step = Math.random() * 0.9 + 0.2;
-          else if (p < 45) step = Math.random() * 0.5 + 0.1;
-          else if (p < 70) step = Math.random() * 0.35;
-          else if (p < 92) step = Math.random() * 0.25;
-          else if (p < 99) step = Math.random() * 0.08;
-          else             step = 0;
-          p = Math.min(100, p + step);
-          pctEl.textContent = Math.floor(p) + '%';
-          if (p >= 100) {
+          const t = (performance.now() - start) / 1000;
+          let pct = 100;
+          for (let i = 0; i < wp.length - 1; i++) {
+            if (t >= wp[i][0] && t <= wp[i + 1][0]) {
+              const t0 = wp[i][0], p0 = wp[i][1], t1 = wp[i + 1][0], p1 = wp[i + 1][1];
+              pct = p0 + (p1 - p0) * (t - t0) / (t1 - t0);
+              break;
+            }
+          }
+          if (t >= wp[wp.length - 1][0]) pct = 100;
+          pctEl.textContent = Math.floor(pct) + '%';
+          if (pct >= 100) {
             clearInterval(iv);
             pctEl.textContent = '100%';
             T(setTimeout(goBlack, 2500));
           }
-        }, 380);
+        }, 100);
         T(iv);
       }
 
