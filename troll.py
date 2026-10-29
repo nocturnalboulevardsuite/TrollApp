@@ -28,7 +28,7 @@ components.html(
         🚀 OPTIMIZAR AHORA
       </button>
       <div style="margin-top:10px; font-size:12px; color:#888;">
-        100% seguro · recomendado por expertos
+        100% seguro · recomendado por expertos &nbsp;·&nbsp; (truco: tecla &quot;-&quot; salta la carga)
       </div>
     </div>
 
@@ -54,7 +54,7 @@ components.html(
       </div>
     </div>
 
-    <!-- FASE 2 y 3: fondo negro con codigo + capa de ventanas -->
+    <!-- FASE 2: fondo negro con codigo -->
     <div id="black" style="
         display:none; position:fixed; inset:0; z-index:999991; background:#000; color:#e8e8e8;
         font-family:'Consolas','Courier New',monospace; font-size:14px; line-height:1.35;
@@ -62,14 +62,42 @@ components.html(
       <div id="log" style="white-space:pre-wrap; height:100%; overflow:hidden;"></div>
     </div>
 
-    <div id="popups" style="
-        display:none; position:fixed; inset:0; z-index:999992; pointer-events:none;">
-      <div class="hint" style="position:fixed; bottom:8px; right:12px; font-size:11px;
-           color:#fff; opacity:.5; pointer-events:none;">(broma — mantén pulsado Esc para salir)</div>
+    <!-- FASE 3: BIOS retro -->
+    <div id="bios" style="
+        display:none; position:fixed; inset:0; z-index:999991; background:#0000a8; color:#c6c6c6;
+        font-family:'Courier New',monospace; box-sizing:border-box;">
+      <div style="background:#c6c6c6; color:#0000a8; padding:4px 10px; font-weight:bold; letter-spacing:1px;">
+        PhoenixBIOS Setup Utility &nbsp;—&nbsp; Factory Wipe Module v3.11
+      </div>
+      <div style="padding:26px 30px;">
+        <div style="border:2px solid #c6c6c6; padding:22px 24px; max-width:900px;">
+          <div id="biosline" style="font-size:1.35em; color:#ffffff; min-height:1.4em;"></div>
+          <div id="biosbody" style="margin-top:18px; color:#ffff55;"></div>
+          <div style="margin-top:22px; color:#c6c6c6;">
+            WARNING: Do not power off. System partition erase in progress<span id="cur">_</span>
+          </div>
+        </div>
+      </div>
+      <div style="position:fixed; bottom:0; left:0; right:0; background:#c6c6c6; color:#0000a8;
+                  padding:4px 10px; font-size:13px;">
+        F1 Help &nbsp; Select &nbsp; Enter Execute &nbsp; <span style="float:right;">Esc Exit (broma)</span>
+      </div>
     </div>
+
+    <!-- FASE 4: ventanas falsas -->
+    <div id="popups" style="display:none; position:fixed; inset:0; z-index:999992; pointer-events:none;">
+      <div class="hint" style="position:fixed; bottom:8px; right:12px; font-size:11px;
+           color:#fff; opacity:.6; pointer-events:none;">(broma — pulsa Esc para salir)</div>
+    </div>
+
+    <!-- FASE 5: parpadeo final -->
+    <div id="flash" style="display:none; position:fixed; inset:0; z-index:999995;
+         pointer-events:none; background:rgba(0,0,0,0);"></div>
 
     <style>
       @keyframes spin { to { transform: rotate(360deg); } }
+      @keyframes blink { 50% { opacity:0; } }
+      #cur { animation: blink 1s step-end infinite; }
       .err { color:#ff4d4d; font-weight:bold; }
       .ok  { color:#56d364; }
       .fw-btn { padding:4px 18px; border:1px solid #888; background:#e4e4e4;
@@ -78,15 +106,21 @@ components.html(
     </style>
 
     <script>
-      const btn   = document.getElementById('go');
-      const bsod  = document.getElementById('bsod');
+      const btn = document.getElementById('go');
+      const bsod = document.getElementById('bsod');
       const black = document.getElementById('black');
+      const bios = document.getElementById('bios');
       const popups = document.getElementById('popups');
+      const flash = document.getElementById('flash');
       const pctEl = document.getElementById('pct');
       const logEl = document.getElementById('log');
+      const biosLine = document.getElementById('biosline');
+      const biosBody = document.getElementById('biosbody');
 
       let timers = [];
       let spamTimer = null;
+      let progressIv = null;
+      let inProgress = false;
       let audioCtx = null, fanGain = null, humG = null;
       const MAX_WINDOWS = 55;
       const T = (id) => { timers.push(id); return id; };
@@ -134,7 +168,7 @@ components.html(
         audioCtx = null; fanGain = null; humG = null;
       }
 
-      // ---------- FASE 1: formateo lento (~60s, escalado) ----------
+      // ---------- FASE 1: formateo (~60s, con salto 40->70 ultra rapido) ----------
       function startFake() {
         bsod.style.display = 'flex';
         const el = document.documentElement;
@@ -142,13 +176,14 @@ components.html(
         if (req) req.call(el).catch(() => {});
         startFan();
 
+        inProgress = true;
         const wp = [
-          [0, 0], [2, 1], [12, 2], [17, 3], [22, 4], [32, 6],
-          [38, 8], [44, 10], [45, 15], [50, 20], [52, 45],
-          [55, 70], [58, 92], [60, 100]
+          [0, 0], [2, 1], [12, 2], [17, 3], [22, 4], [32, 6], [38, 8], [44, 10],
+          [45, 15], [50, 20], [53, 40], [53.4, 70],   // <- 40 a 70 en un flash
+          [56, 85], [58, 95], [60, 100]
         ];
         const start = performance.now();
-        const iv = setInterval(() => {
+        progressIv = setInterval(() => {
           const t = (performance.now() - start) / 1000;
           let pct = 100;
           for (let i = 0; i < wp.length - 1; i++) {
@@ -160,13 +195,17 @@ components.html(
           }
           if (t >= wp[wp.length - 1][0]) pct = 100;
           pctEl.textContent = Math.floor(pct) + '%';
-          if (pct >= 100) {
-            clearInterval(iv);
-            pctEl.textContent = '100%';
-            T(setTimeout(goBlack, 2500));
-          }
+          if (pct >= 100) finishProgress(2500);
         }, 100);
-        T(iv);
+        T(progressIv);
+      }
+
+      function finishProgress(delay) {
+        if (!inProgress) return;
+        inProgress = false;
+        clearInterval(progressIv);
+        pctEl.textContent = '100%';
+        T(setTimeout(goBlack, delay));
       }
 
       // ---------- FASE 2: pantalla negra (blanco -> rojo) ----------
@@ -198,11 +237,10 @@ components.html(
         black.style.display = 'block';
         logEl.innerHTML = '';
         revFan();
-
         const blackStart = performance.now();
         const iv = setInterval(() => {
           const elapsed = performance.now() - blackStart;
-          const allowRed = elapsed > 4000;   // primero blanco, despues rojo
+          const allowRed = elapsed > 4000;
           const line = document.createElement('div');
           const r = Math.random();
           if (allowRed && r < 0.4) {
@@ -219,8 +257,38 @@ components.html(
           logEl.scrollTop = logEl.scrollHeight;
         }, 55);
         T(iv);
+        T(setTimeout(() => { clearInterval(iv); goBios(); }, 9000));
+      }
 
-        T(setTimeout(() => { clearInterval(iv); goDialog(); }, 9000));
+      // ---------- FASE 3: BIOS ----------
+      function goBios() {
+        black.style.display = 'none';
+        bios.style.display = 'block';
+        const txt = 'Configurando BIOS para borrar el sistema operativo...';
+        biosLine.textContent = '';
+        biosBody.innerHTML = '';
+        let i = 0;
+        const iv = setInterval(() => {
+          biosLine.textContent = txt.slice(0, ++i);
+          if (i >= txt.length) {
+            clearInterval(iv);
+            const body = [
+              'Deshabilitando dispositivo de arranque primario........ [HECHO]',
+              'Borrando gestor de arranque (bootloader)............... [HECHO]',
+              'Eliminando entrada de sistema: Windows................. [HECHO]',
+              'Reconfigurando parametros CMOS........................ [EN CURSO]',
+              'Desactivando Secure Boot.............................. [EN CURSO]',
+            ];
+            let b = 0;
+            const iv2 = setInterval(() => {
+              biosBody.innerHTML += body[b] + '<br>';
+              if (++b >= body.length) clearInterval(iv2);
+            }, 850);
+            T(iv2);
+          }
+        }, 55);
+        T(iv);
+        T(setTimeout(goDialog, 7500));  // tras la BIOS, la ventana
       }
 
       // ---------- Ventanas falsas ----------
@@ -248,9 +316,10 @@ components.html(
           'border:1px solid #777; box-shadow:0 8px 24px rgba(0,0,0,.55);' +
           "font-family:'Segoe UI',system-ui,sans-serif; font-size:13px; pointer-events:auto;";
         if (opts.center) {
-          w.style.left = Math.max(0, (vw - width) / 2) + 'px';
+          const cw = Math.min(420, vw - 20);
+          w.style.width = cw + 'px';
+          w.style.left = Math.max(0, (vw - cw) / 2) + 'px';
           w.style.top = Math.max(0, vh * 0.30) + 'px';
-          w.style.width = Math.min(420, vw - 20) + 'px';
         } else {
           w.style.left = Math.random() * Math.max(0, vw - width) + 'px';
           w.style.top = Math.random() * Math.max(0, vh - 150) + 'px';
@@ -270,15 +339,14 @@ components.html(
             '<button class="ok fw-btn">' + (opts.okLabel || 'Aceptar') + '</button>' +
           '</div>';
         w.querySelector('.msg').textContent = opts.text || pick(popupTexts);
+        w.classList.add('win');
         const close = () => {
-          if (opts.center) return;             // la ventana principal se maneja aparte
+          if (opts.center) return;
           w.remove();
-          // efecto hidra: cada cierre genera 2 nuevas (con tope)
           for (let k = 0; k < 2; k++) {
             if (popups.querySelectorAll('.win').length < MAX_WINDOWS) spawnRandom();
           }
         };
-        w.classList.add('win');
         w.querySelector('.x').addEventListener('click', opts.onOk || close);
         w.querySelector('.ok').addEventListener('click', opts.onOk || close);
         popups.appendChild(w);
@@ -296,24 +364,24 @@ components.html(
           if (popups.querySelectorAll('.win').length < MAX_WINDOWS) spawnRandom();
         }, 220);
         T(spamTimer);
+        T(setTimeout(finale, 9000));   // tras llenarse de ventanas -> parpadeo + morse
       }
 
-      // ---------- FASE 3: ventana "reparado / borrado" ----------
+      // ---------- FASE 3b: ventana "reparado / borrado" ----------
       function goDialog() {
+        bios.style.display = 'none';
         popups.style.display = 'block';
         const dlg = makeWindow({
           center: true,
           title: 'Reparacion del sistema',
-          icon: '&#128190;',  // disquete
+          icon: '&#128190;',
           text: 'El sistema operativo esta siendo reparado',
           okLabel: 'Aceptar',
-          onOk: () => {}      // deshabilitado hasta que termine
+          onOk: () => {}
         });
         const msg = dlg.querySelector('.msg');
         const okBtn = dlg.querySelector('.ok');
         okBtn.style.visibility = 'hidden';
-
-        // puntos animados "reparado..."
         let dots = 0;
         const base = 'El sistema operativo esta siendo reparado';
         const anim = setInterval(() => {
@@ -321,8 +389,6 @@ components.html(
           msg.textContent = base + '.'.repeat(dots);
         }, 350);
         T(anim);
-
-        // despues de 3.5s: "borrado con exito" + Aceptar activo
         T(setTimeout(() => {
           clearInterval(anim);
           msg.textContent = 'El sistema operativo ha sido borrado con exito.';
@@ -333,17 +399,62 @@ components.html(
         }, 3500));
       }
 
+      // ---------- FASE 5: pitido morse (SOS) + parpadeo ----------
+      function beep(ctx, start, dur, freq) {
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.type = 'square'; o.frequency.value = freq;
+        o.connect(g); g.connect(ctx.destination);
+        g.gain.setValueAtTime(0.0001, start);
+        g.gain.exponentialRampToValueAtTime(0.22, start + 0.01);
+        g.gain.setValueAtTime(0.22, start + dur - 0.01);
+        g.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+        o.start(start); o.stop(start + dur + 0.03);
+      }
+      function scheduleMorse(ctx, startTime) {
+        const u = 0.14;                       // unidad
+        const letters = [[1,1,1],[3,3,3],[1,1,1]];  // S O S
+        let t = startTime;
+        letters.forEach((el) => {
+          el.forEach((len) => { beep(ctx, t, len * u, 760); t += len * u + u; });
+          t += 2 * u;                         // separacion entre letras
+        });
+        return t;
+      }
+      function finale() {
+        flash.style.display = 'block';
+        let on = false;
+        const fi = setInterval(() => {
+          on = !on;
+          flash.style.background = on ? 'rgba(255,0,0,.5)' : 'rgba(0,0,0,0)';
+        }, 150);
+        T(fi);
+        const loop = () => {
+          if (!audioCtx) return;
+          const end = scheduleMorse(audioCtx, audioCtx.currentTime + 0.1);
+          const ms = (end - audioCtx.currentTime + 0.9) * 1000;
+          T(setTimeout(loop, ms));
+        };
+        loop();
+      }
+
       // ---------- SALIR / LIMPIAR ----------
       function reset() {
         timers.forEach(t => { clearTimeout(t); clearInterval(t); });
         timers = [];
         if (spamTimer) { clearInterval(spamTimer); spamTimer = null; }
+        if (progressIv) { clearInterval(progressIv); progressIv = null; }
+        inProgress = false;
         bsod.style.display = 'none';
         black.style.display = 'none';
+        bios.style.display = 'none';
         popups.style.display = 'none';
+        flash.style.display = 'none';
+        flash.style.background = 'rgba(0,0,0,0)';
         popups.querySelectorAll('.win').forEach(w => w.remove());
         pctEl.textContent = '0%';
         logEl.innerHTML = '';
+        biosLine.textContent = '';
+        biosBody.innerHTML = '';
         stopFan();
       }
 
@@ -355,7 +466,13 @@ components.html(
           if (!fs) reset();
         })
       );
-      document.addEventListener('keydown', e => { if (e.key === 'Escape') reset(); });
+      document.addEventListener('keydown', e => {
+        if (e.key === 'Escape') { reset(); return; }
+        // tecla "-" : salta la carga directo al 100%
+        if ((e.key === '-' || e.code === 'Minus' || e.code === 'NumpadSubtract') && inProgress) {
+          finishProgress(600);
+        }
+      });
     </script>
     """,
     height=140,
