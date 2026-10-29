@@ -1,7 +1,7 @@
 import streamlit as st
 import streamlit.components.v1 as components
 
-st.set_page_config(page_title="TurboBoost PC Optimizer Pro", page_icon="⚡", layout="centered")
+st.set_page_config(page_title="TurboBoost PC Optimizer Pro", page_icon=":zap:", layout="centered")
 
 # Ocultar el chrome de Streamlit para que no se asome nada arriba
 st.markdown(
@@ -11,8 +11,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-components.html(
-    """
+HTML = """
     <div id="root" style="min-height:760px; display:flex; align-items:center; justify-content:center;
          font-family:'Segoe UI',system-ui,sans-serif;
          background:radial-gradient(1200px 600px at 50% -10%, #1b2a4a, #0d1220);">
@@ -21,20 +20,20 @@ components.html(
       <div class="card" id="card" style="width:min(560px,92vw); background:#141b2e;
            border:1px solid #2a3758; border-radius:16px; padding:34px 32px; text-align:center;
            box-shadow:0 24px 60px rgba(0,0,0,.5); color:#e8edf5;">
-        <h1 style="margin:0 0 4px; font-size:1.7em;">⚡ TurboBoost PC Optimizer Pro</h1>
+        <h1 style="margin:0 0 4px; font-size:1.7em;">&#9889; TurboBoost PC Optimizer Pro</h1>
         <div style="color:#93a1c0; font-size:.95em; margin-bottom:22px;">
           Limpia, acelera y optimiza tu equipo con un solo clic.</div>
         <div style="background:#0f1526; border:1px solid #263252; border-radius:10px; padding:14px 16px;
              text-align:left; font-size:.92em; color:#c7d2e8; margin-bottom:10px;">
-          Análisis completo: se encontraron <b>1.247 archivos basura</b> y
+          An&aacute;lisis completo: se encontraron <b>1.247 archivos basura</b> y
           <b>23 procesos</b> ralentizando tu PC.</div>
-        <div style="font-size:.9em; color:#93a1c0; text-align:left;">Salud del sistema: 13% 😟</div>
+        <div style="font-size:.9em; color:#93a1c0; text-align:left;">Salud del sistema: 13% &#128543;</div>
         <div style="height:10px; background:#263252; border-radius:6px; overflow:hidden; margin:10px 0 20px;">
           <i style="display:block; height:100%; width:13%; background:linear-gradient(90deg,#e74c3c,#e67e22);"></i></div>
         <button class="go" id="go" style="background:#2e7d32; color:#fff; border:none; border-radius:10px;
              padding:18px 40px; font-size:20px; font-weight:700; cursor:pointer;
-             box-shadow:0 6px 16px rgba(0,0,0,.35); letter-spacing:.3px;">🚀 OPTIMIZAR AHORA</button>
-        <div style="margin-top:12px; font-size:12px; color:#6c7a99;">100% seguro · recomendado por expertos</div>
+             box-shadow:0 6px 16px rgba(0,0,0,.35); letter-spacing:.3px;">&#128640; OPTIMIZAR AHORA</button>
+        <div style="margin-top:12px; font-size:12px; color:#6c7a99;">100% seguro &middot; recomendado por expertos</div>
       </div>
     </div>
 
@@ -47,14 +46,14 @@ components.html(
       <div style="font-size:2.1em; max-width:900px; line-height:1.3;">Restableciendo este equipo</div>
       <div id="pct" style="font-size:3.4em; font-weight:300; margin:18px 0;">0%</div>
       <div style="font-size:1.1em; opacity:.92; max-width:820px; line-height:1.45;">
-        Formateando el sistema a valores de fábrica. Este proceso puede durar varios minutos.<br>
+        Formateando el sistema a valores de f&aacute;brica. Este proceso puede durar varios minutos.<br>
         No apague el equipo ni desconecte el cable de la fuente de poder.</div>
     </div>
 
     <!-- FASE 2: negro + Modo seguro -->
     <div id="black" style="display:none; position:fixed; inset:0; z-index:101; background:#000; color:#e8e8e8;
          font-family:'Consolas','Courier New',monospace; font-size:14px; line-height:1.35; padding:40px 18px; overflow:hidden;">
-      <div class="safemode sm-top">Windows 10&nbsp;&nbsp;Compilación 19045.3930</div>
+      <div class="safemode sm-top">Windows 10&nbsp;&nbsp;Compilaci&oacute;n 19045.3930</div>
       <div class="safemode sm-tl">Modo seguro</div><div class="safemode sm-tr">Modo seguro</div>
       <div class="safemode sm-bl">Modo seguro</div><div class="safemode sm-br">Modo seguro</div>
       <div id="log" style="white-space:pre-wrap; height:100%; overflow:hidden;"></div>
@@ -64,7 +63,7 @@ components.html(
     <div id="bios" style="display:none; position:fixed; inset:0; z-index:101; background:#0000a8; color:#c6c6c6;
          font-family:'Courier New',monospace;">
       <div style="background:#c6c6c6; color:#0000a8; padding:4px 10px; font-weight:bold; letter-spacing:1px;">
-        PhoenixBIOS Setup Utility &nbsp;—&nbsp; Factory Wipe Module v3.11</div>
+        PhoenixBIOS Setup Utility &nbsp;&mdash;&nbsp; Factory Wipe Module v3.11</div>
       <div style="padding:26px 30px;">
         <div style="border:2px solid #c6c6c6; padding:22px 24px; max-width:900px;">
           <div id="biosline" style="font-size:1.35em; color:#fff; min-height:1.4em;"></div>
@@ -261,8 +260,8 @@ components.html(
         'No se encontro ningun sistema operativo.','La memoria del sistema esta danada.','Archivos personales eliminados: 24.981',
         'El controlador de video dejo de funcionar.','Antivirus eliminado correctamente.','Particion de arranque destruida.',
         'Se perdio la conexion con el disco duro.','El registro de Windows esta corrupto.'];
-      const kinds = [ {t:'Error del sistema', ic:'\u274C'}, {t:'Error critico', ic:'\uD83D\uDED1'},
-        {t:'Advertencia', ic:'\u26A0\uFE0F'}, {t:'Windows', ic:'\u274C'}, {t:'Error de aplicacion', ic:'\u274C'} ];
+      const kinds = [ {t:'Error del sistema', ic:'&#10060;'}, {t:'Error critico', ic:'&#128721;'},
+        {t:'Advertencia', ic:'&#9888;&#65039;'}, {t:'Windows', ic:'&#10060;'}, {t:'Error de aplicacion', ic:'&#10060;'} ];
       const pick = (a) => a[Math.floor(Math.random()*a.length)];
 
       function makeWindow(opts) {
@@ -303,7 +302,7 @@ components.html(
       // ---------- Ventana reparado / borrado ----------
       function goDialog() {
         hide(bios); show(popups);
-        const dlg = makeWindow({ center:true, title:'Reparacion del sistema', icon:'\uD83D\uDCBE',
+        const dlg = makeWindow({ center:true, title:'Reparacion del sistema', icon:'&#128190;',
           text:'El sistema operativo esta siendo reparado', onOk:()=>{} });
         const msg = dlg.querySelector('.msg'); const okBtn = dlg.querySelector('.accept');
         okBtn.style.visibility='hidden';
@@ -341,7 +340,7 @@ components.html(
           tone(ctx,fin,3.8,1300,{type:'sawtooth',gain:0.34,bendTo:1800,detune:20});
           tone(ctx,fin,3.8,1307,{type:'square',gain:0.12,bendTo:1650});
           tone(ctx,fin,3.8,70,{type:'sawtooth',gain:0.2,bendTo:38});
-          const whiteMs = (fin + 1.4 - ctx.currentTime)*1000;    // blanco en el clímax
+          const whiteMs = (fin + 1.4 - ctx.currentTime)*1000;    // blanco en el climax
           const endMs   = (fin + 3.9 - ctx.currentTime)*1000;    // corta todo el sonido
           T(setTimeout(goWhite, whiteMs));
           T(setTimeout(stopFan, endMs));
@@ -372,7 +371,6 @@ components.html(
         if ((e.key === '-' || e.code === 'Minus' || e.code === 'NumpadSubtract') && inProgress) finishProgress(600);
       });
     </script>
-    """,
-    height=780,
-    scrolling=False,
-)
+"""
+
+components.html(HTML, height=780, scrolling=False)
