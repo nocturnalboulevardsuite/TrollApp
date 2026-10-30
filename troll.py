@@ -632,29 +632,84 @@ HTML = r"""
   // ===== FINALE =====
   function finale(){
     show(flash);
-    // Flash acelerado: empieza en 500ms, baja exponencialmente hasta ~22ms, dura 15s
-    const totalMs=15000;
-    const startInterval=500, endInterval=22;
+    // Flash: empieza en 380ms, llega a 8ms (casi continuo), dura 18s
+    const totalMs=18000;
+    const startInterval=380, endInterval=8;
     const startTime=performance.now();
     let on=false;
     function flicker(){
-      if(!audioCtx && flash.style.display==='none') return;
       const elapsed=performance.now()-startTime;
       if(elapsed>=totalMs){ goWhite(); return; }
       on=!on;
-      flash.style.background=on?'rgba(255,0,0,.7)':'rgba(0,0,0,.9)';
-      // intervalo actual: decae exponencialmente de startInterval a endInterval
+      // alternar rojo puro / negro puro (mas contraste, mas agresivo)
+      flash.style.background=on?'#ff0000':'#000000';
       const ratio=elapsed/totalMs;
-      const interval=startInterval*Math.pow(endInterval/startInterval, ratio);
-      T(setTimeout(flicker, interval));
+      const interval=startInterval*Math.pow(endInterval/startInterval,ratio);
+      T(setTimeout(flicker,interval));
     }
     flicker();
 
     function goWhite(){
       flash.style.background='#ffffff';
       flash.style.display='block';
-      T(setTimeout(stopFan,500));
+      T(setTimeout(stopFan,400));
     }
+
+    if(!audioCtx) return;
+    const ctx=audioCtx;
+
+    // ---- EXPLOSION DE SATURACION A TOPE ----
+    // Waveshaper extremo: clipea todo a tope (hard clip)
+    const hardClip=(drv)=>{
+      const ws=ctx.createWaveShaper(); const n=1024; const cv=new Float32Array(n);
+      for(let j=0;j<n;j++){ const x=(j*2)/n-1; cv[j]=Math.max(-1,Math.min(1,x*drv)); }
+      ws.curve=cv; ws.oversample='4x'; return ws;
+    };
+    // Segundo waveshaper tanh para redondear el clip
+    const softClip=(drv)=>{
+      const ws=ctx.createWaveShaper(); const n=1024; const cv=new Float32Array(n);
+      for(let j=0;j<n;j++){ const x=(j*2)/n-1; cv[j]=Math.tanh(x*drv); }
+      ws.curve=cv; ws.oversample='4x'; return ws;
+    };
+
+    // Master chain: pre-gain -> hard clip -> soft clip -> master out
+    const preG=ctx.createGain(); preG.gain.value=6.0;
+    const hc=hardClip(25);
+    const sc=softClip(30);
+    const masterG=ctx.createGain(); masterG.gain.value=1.2;
+    preG.connect(hc); hc.connect(sc); sc.connect(masterG); masterG.connect(ctx.destination);
+
+    // Ruido blanco puro a tope (base de la explosion)
+    const nSize=ctx.sampleRate*2;
+    const nBuf=ctx.createBuffer(1,nSize,ctx.sampleRate);
+    const nD=nBuf.getChannelData(0);
+    for(let i=0;i<nSize;i++) nD[i]=Math.random()*2-1;
+    const nSrc=ctx.createBufferSource(); nSrc.buffer=nBuf; nSrc.loop=true;
+    const nG=ctx.createGain(); nG.gain.value=2.5;
+    nSrc.connect(nG); nG.connect(preG); nSrc.start();
+    T(setTimeout(()=>{ try{nSrc.stop();}catch(e){} }, totalMs+500));
+
+    // Capa de osciladores caoticos: frecuencias que suben sin parar
+    const chaos=[80,160,320,640,900,1200,1800,2400,3200,4000,5500,7000];
+    chaos.forEach((f,idx)=>{
+      const o=ctx.createOscillator();
+      o.type=(idx%2===0)?'sawtooth':'square';
+      o.frequency.setValueAtTime(f,ctx.currentTime);
+      // cada oscilador sube a frecuencia diferente para crear caos total
+      o.frequency.linearRampToValueAtTime(f*3.5+Math.random()*2000, ctx.currentTime+totalMs/1000);
+      const oG=ctx.createGain(); oG.gain.value=0.8+Math.random()*0.6;
+      o.connect(oG); oG.connect(preG); o.start(); o.stop(ctx.currentTime+totalMs/1000+0.5);
+    });
+
+    // Sub-grave que retumba (hace que el parlante casi truene)
+    const sub=ctx.createOscillator(); sub.type='sawtooth'; sub.frequency.value=35;
+    sub.frequency.linearRampToValueAtTime(18, ctx.currentTime+totalMs/1000);
+    const subG=ctx.createGain(); subG.gain.value=3.5;
+    sub.connect(subG); subG.connect(preG); sub.start(); sub.stop(ctx.currentTime+totalMs/1000+0.5);
+
+    // Subida progresiva del master para que EXPLOTE de a poco a todo
+    masterG.gain.setValueAtTime(0.3, ctx.currentTime);
+    masterG.gain.linearRampToValueAtTime(2.5, ctx.currentTime+totalMs/1000);
   }
 
   document.addEventListener('keydown',e=>{
