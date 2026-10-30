@@ -358,42 +358,57 @@ HTML = r"""
   function startFan(){
     try{
       audioCtx=new (window.AudioContext||window.webkitAudioContext)();
-      const ctx=audioCtx, size=2*ctx.sampleRate;
-      const buf=ctx.createBuffer(1,size,ctx.sampleRate); const d=buf.getChannelData(0); let last=0;
-      for(let i=0;i<size;i++){ const w=Math.random()*2-1; last=(last+0.02*w)/1.02; d[i]=last*3.2; }
-      const noise=ctx.createBufferSource(); noise.buffer=buf; noise.loop=true;
-      const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=620;
-      // Fan arranca muy suave y sube durante ~60s (duracion de la barra de progreso)
-      fanGain=ctx.createGain(); fanGain.gain.value=0.0001;
-      noise.connect(lp); lp.connect(fanGain); fanGain.connect(ctx.destination); noise.start();
-      // wobble de RPM (surge irregular, como roto) - empieza pequeno y crece
-      const amp=ctx.createOscillator(); amp.type='sine'; amp.frequency.value=5.2;
-      const ampG=ctx.createGain(); ampG.gain.value=0.001;
-      amp.connect(ampG); ampG.connect(fanGain.gain); amp.start();
-      const amp2=ctx.createOscillator(); amp2.type='sine'; amp2.frequency.value=0.6;
-      const ampG2=ctx.createGain(); ampG2.gain.value=0.001;
-      amp2.connect(ampG2); ampG2.connect(fanGain.gain); amp2.start();
-      // zumbido grave - arranca casi mudo
-      const hum=ctx.createOscillator(); hum.type='sawtooth'; hum.frequency.value=82;
-      humG=ctx.createGain(); humG.gain.value=0.0001;
-      hum.connect(humG); humG.connect(ctx.destination); hum.start();
-      // rodamiento danado con wobble
-      const grind=ctx.createOscillator(); grind.type='sawtooth'; grind.frequency.value=94;
-      const gbp=ctx.createBiquadFilter(); gbp.type='lowpass'; gbp.frequency.value=320;
-      grindG=ctx.createGain(); grindG.gain.value=0.0001;
-      grind.connect(gbp); gbp.connect(grindG); grindG.connect(ctx.destination); grind.start();
-      const wob=ctx.createOscillator(); wob.type='sine'; wob.frequency.value=0.8;
-      const wobG=ctx.createGain(); wobG.gain.value=16;
-      wob.connect(wobG); wobG.connect(grind.frequency); wob.start();
-      // rampa suave de 0 a pleno en ~60s (igual que la barra de progreso)
-      const tNow=ctx.currentTime;
-      fanGain.gain.exponentialRampToValueAtTime(0.13, tNow+60);
-      ampG.gain.linearRampToValueAtTime(0.07,  tNow+60);
-      ampG2.gain.linearRampToValueAtTime(0.05, tNow+60);
-      humG.gain.exponentialRampToValueAtTime(0.045,  tNow+60);
-      grindG.gain.exponentialRampToValueAtTime(0.04, tNow+60);
-      knockLoop();
+      const ctx=audioCtx;
+      // CRITICO: resume explicito - dentro del iframe de Streamlit el contexto
+      // puede quedar suspended aunque haya user gesture
+      ctx.resume().then(function(){ buildFan(ctx); }).catch(function(){ buildFan(ctx); });
     }catch(e){}
+  }
+  function buildFan(ctx){
+    // --- Ruido marron (base del ventilador) ---
+    const size=2*ctx.sampleRate;
+    const buf=ctx.createBuffer(1,size,ctx.sampleRate);
+    const d=buf.getChannelData(0); let last=0;
+    for(let i=0;i<size;i++){ const w=Math.random()*2-1; last=(last+0.02*w)/1.02; d[i]=last*3.2; }
+    const noise=ctx.createBufferSource(); noise.buffer=buf; noise.loop=true;
+    const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=620;
+    // El gain sube de casi-cero a pleno en ~60s usando un SetInterval
+    // (mas fiable en iframes que encadenar ramps con nodos moduladores)
+    fanGain=ctx.createGain(); fanGain.gain.value=0.0001;
+    noise.connect(lp); lp.connect(fanGain); fanGain.connect(ctx.destination); noise.start();
+
+    // --- Zumbido grave de motor ---
+    const hum=ctx.createOscillator(); hum.type='sawtooth'; hum.frequency.value=82;
+    humG=ctx.createGain(); humG.gain.value=0.0001;
+    hum.connect(humG); humG.connect(ctx.destination); hum.start();
+
+    // --- Rodamiento danado: saw grave con wobble de frecuencia ---
+    const grind=ctx.createOscillator(); grind.type='sawtooth'; grind.frequency.value=94;
+    const gbp=ctx.createBiquadFilter(); gbp.type='lowpass'; gbp.frequency.value=320;
+    grindG=ctx.createGain(); grindG.gain.value=0.0001;
+    grind.connect(gbp); gbp.connect(grindG); grindG.connect(ctx.destination); grind.start();
+    // wobble de frecuencia (lo conectamos al frequency, no al gain, para no
+    // interferir con la rampa de volumen)
+    const wob=ctx.createOscillator(); wob.type='sine'; wob.frequency.value=0.9;
+    const wobG=ctx.createGain(); wobG.gain.value=14;
+    wob.connect(wobG); wobG.connect(grind.frequency); wob.start();
+
+    // --- Rampa de volumen: sube de 0 a pleno en 60 pasos de 1s cada uno ---
+    // Usamos setInterval en JS (no automation nodes) para ser 100% fiable en iframe
+    const steps=60;
+    let step=0;
+    const rampIv=setInterval(function(){
+      if(!audioCtx || step>=steps){ clearInterval(rampIv); return; }
+      step++;
+      const ratio=step/steps;                          // 0..1 lineal en el tiempo
+      const expRatio=Math.pow(ratio,2.2);              // curva exponencial perceptual
+      fanGain.gain.setTargetAtTime(0.14*expRatio+0.0001,  ctx.currentTime, 0.4);
+      humG.gain.setTargetAtTime(0.048*expRatio+0.0001,    ctx.currentTime, 0.4);
+      grindG.gain.setTargetAtTime(0.042*expRatio+0.0001,  ctx.currentTime, 0.4);
+    },1000);
+    T(rampIv);
+
+    knockLoop();
   }
   function scheduleKnock(){
     if(!audioCtx) return;
