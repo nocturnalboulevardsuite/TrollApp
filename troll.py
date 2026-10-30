@@ -369,36 +369,36 @@ HTML = r"""
       for(let i=0;i<size;i++){ const w=Math.random()*2-1; last=(last+0.02*w)/1.02; d[i]=last*3.2; }
       const noise=ctx.createBufferSource(); noise.buffer=buf; noise.loop=true;
       const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=620;
-      fanGain=ctx.createGain(); fanGain.gain.value=0.0001;
+      // Arranca con volumen ya audible desde el primer segundo
+      fanGain=ctx.createGain(); fanGain.gain.value=0.04;
       noise.connect(lp); lp.connect(fanGain); fanGain.connect(ctx.destination);
-      noise.start(0);   // start(0) = lo antes posible
+      noise.start(0);
 
       // --- Zumbido grave de motor ---
       const hum=ctx.createOscillator(); hum.type='sawtooth'; hum.frequency.value=82;
-      humG=ctx.createGain(); humG.gain.value=0.0001;
+      humG=ctx.createGain(); humG.gain.value=0.012;
       hum.connect(humG); humG.connect(ctx.destination); hum.start(0);
 
       // --- Rodamiento danado + wobble de frecuencia ---
       const grind=ctx.createOscillator(); grind.type='sawtooth'; grind.frequency.value=94;
       const gbp=ctx.createBiquadFilter(); gbp.type='lowpass'; gbp.frequency.value=320;
-      grindG=ctx.createGain(); grindG.gain.value=0.0001;
+      grindG=ctx.createGain(); grindG.gain.value=0.010;
       grind.connect(gbp); gbp.connect(grindG); grindG.connect(ctx.destination); grind.start(0);
       const wob=ctx.createOscillator(); wob.type='sine'; wob.frequency.value=0.9;
       const wobG=ctx.createGain(); wobG.gain.value=14;
       wob.connect(wobG); wobG.connect(grind.frequency); wob.start(0);
 
-      // Resume DESPUES de arrancar los nodos (no antes)
       if(ctx.state==='suspended') ctx.resume();
 
-      // Rampa de volumen via setInterval: 60 pasos x 1s = 60s total, curva exponencial
-      const steps=60; let step=0;
+      // Rampa: 40 pasos x 1s = sube de bajo a pleno en ~40s, curva suave
+      const steps=40; let step=0;
       const rampIv=setInterval(function(){
         if(!audioCtx||step>=steps){ clearInterval(rampIv); return; }
         step++;
-        const v=Math.pow(step/steps, 2.4);   // 0 a 1 con aceleracion
-        fanGain.gain.setTargetAtTime(0.15*v+0.0002, ctx.currentTime, 0.5);
-        humG.gain.setTargetAtTime(0.05*v+0.0002,    ctx.currentTime, 0.5);
-        grindG.gain.setTargetAtTime(0.04*v+0.0002,  ctx.currentTime, 0.5);
+        const v=Math.pow(step/steps, 1.4);   // curva moderada: audible rapido, sube progresivo
+        fanGain.gain.setTargetAtTime(0.04+0.11*v, ctx.currentTime, 0.6);
+        humG.gain.setTargetAtTime(0.012+0.038*v,  ctx.currentTime, 0.6);
+        grindG.gain.setTargetAtTime(0.010+0.030*v, ctx.currentTime, 0.6);
       },1000);
       T(rampIv);
 
