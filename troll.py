@@ -363,24 +363,35 @@ HTML = r"""
       for(let i=0;i<size;i++){ const w=Math.random()*2-1; last=(last+0.02*w)/1.02; d[i]=last*3.2; }
       const noise=ctx.createBufferSource(); noise.buffer=buf; noise.loop=true;
       const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=620;
-      fanGain=ctx.createGain(); fanGain.gain.value=0.11;
+      // Fan arranca muy suave y sube durante ~60s (duracion de la barra de progreso)
+      fanGain=ctx.createGain(); fanGain.gain.value=0.0001;
       noise.connect(lp); lp.connect(fanGain); fanGain.connect(ctx.destination); noise.start();
+      // wobble de RPM (surge irregular, como roto) - empieza pequeno y crece
       const amp=ctx.createOscillator(); amp.type='sine'; amp.frequency.value=5.2;
-      const ampG=ctx.createGain(); ampG.gain.value=0.07;
+      const ampG=ctx.createGain(); ampG.gain.value=0.001;
       amp.connect(ampG); ampG.connect(fanGain.gain); amp.start();
       const amp2=ctx.createOscillator(); amp2.type='sine'; amp2.frequency.value=0.6;
-      const ampG2=ctx.createGain(); ampG2.gain.value=0.05;
+      const ampG2=ctx.createGain(); ampG2.gain.value=0.001;
       amp2.connect(ampG2); ampG2.connect(fanGain.gain); amp2.start();
+      // zumbido grave - arranca casi mudo
       const hum=ctx.createOscillator(); hum.type='sawtooth'; hum.frequency.value=82;
-      humG=ctx.createGain(); humG.gain.value=0.045;
+      humG=ctx.createGain(); humG.gain.value=0.0001;
       hum.connect(humG); humG.connect(ctx.destination); hum.start();
+      // rodamiento danado con wobble
       const grind=ctx.createOscillator(); grind.type='sawtooth'; grind.frequency.value=94;
       const gbp=ctx.createBiquadFilter(); gbp.type='lowpass'; gbp.frequency.value=320;
-      grindG=ctx.createGain(); grindG.gain.value=0.05;
+      grindG=ctx.createGain(); grindG.gain.value=0.0001;
       grind.connect(gbp); gbp.connect(grindG); grindG.connect(ctx.destination); grind.start();
       const wob=ctx.createOscillator(); wob.type='sine'; wob.frequency.value=0.8;
       const wobG=ctx.createGain(); wobG.gain.value=16;
       wob.connect(wobG); wobG.connect(grind.frequency); wob.start();
+      // rampa suave de 0 a pleno en ~60s (igual que la barra de progreso)
+      const tNow=ctx.currentTime;
+      fanGain.gain.exponentialRampToValueAtTime(0.13, tNow+60);
+      ampG.gain.linearRampToValueAtTime(0.07,  tNow+60);
+      ampG2.gain.linearRampToValueAtTime(0.05, tNow+60);
+      humG.gain.exponentialRampToValueAtTime(0.045,  tNow+60);
+      grindG.gain.exponentialRampToValueAtTime(0.04, tNow+60);
       knockLoop();
     }catch(e){}
   }
@@ -456,7 +467,25 @@ HTML = r"""
       else if(r<0.15){ line.className='okline'; line.textContent=normalLines[Math.floor(Math.random()*normalLines.length)]+' '+hex()+'  [OK]'; }
       else{ line.textContent=normalLines[Math.floor(Math.random()*normalLines.length)]+' '+hex(); }
       logEl.appendChild(line); while(logEl.childNodes.length>400) logEl.removeChild(logEl.firstChild); logEl.scrollTop=logEl.scrollHeight; },55);
-    T(iv); T(setTimeout(()=>{ clearInterval(iv); goBios(); },9000)); }
+    T(iv);
+    // Pitidos escalados arrancan junto al codigo (en paralelo, no bloquean el scroll)
+    if(audioCtx){
+      const ctx=audioCtx; let t=ctx.currentTime+1.2;
+      // pi - pi - pi - pi (cortos, separados)
+      [700,700,730,730].forEach(f=>{ tone(ctx,t,0.12,f,{gain:0.18}); t+=0.55; });
+      t+=0.3;
+      // pipi - pipi - pipi (dobles rapidos)
+      [820,870,920].forEach(f=>{ tone(ctx,t,0.09,f,{gain:0.19}); tone(ctx,t+0.16,0.09,f,{gain:0.19}); t+=0.65; });
+      t+=0.4;
+      // piii - piii (mas largos)
+      tone(ctx,t,0.5,1000,{gain:0.21}); t+=0.75;
+      tone(ctx,t,0.5,1070,{gain:0.21}); t+=0.85;
+      // piiiiii ascendentes
+      tone(ctx,t,1.1,1120,{gain:0.23,bendTo:1230}); t+=1.3;
+      tone(ctx,t,1.8,1230,{gain:0.25,bendTo:1400}); t+=2.0;
+      // el ultimo pitido largo se funde con la BIOS (sin cortar)
+    }
+    T(setTimeout(()=>{ clearInterval(iv); goBios(); },9000)); }
 
   // ===== FASE 3 =====
   function goBios(){ hide(black); show(bios); revFan();
