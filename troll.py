@@ -369,36 +369,26 @@ HTML = r"""
       for(let i=0;i<size;i++){ const w=Math.random()*2-1; last=(last+0.02*w)/1.02; d[i]=last*3.2; }
       const noise=ctx.createBufferSource(); noise.buffer=buf; noise.loop=true;
       const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=620;
-      // Arranca con volumen ya audible desde el primer segundo
-      fanGain=ctx.createGain(); fanGain.gain.value=0.04;
+      // --- Solo ruido de ventilador limpio, audible desde el arranque ---
+      fanGain=ctx.createGain(); fanGain.gain.value=0.05;
       noise.connect(lp); lp.connect(fanGain); fanGain.connect(ctx.destination);
       noise.start(0);
 
-      // --- Zumbido grave de motor ---
-      const hum=ctx.createOscillator(); hum.type='sawtooth'; hum.frequency.value=82;
-      humG=ctx.createGain(); humG.gain.value=0.012;
+      // Zumbido grave muy sutil (motor), sin wobble
+      const hum=ctx.createOscillator(); hum.type='sawtooth'; hum.frequency.value=78;
+      humG=ctx.createGain(); humG.gain.value=0.010;
       hum.connect(humG); humG.connect(ctx.destination); hum.start(0);
-
-      // --- Rodamiento danado + wobble de frecuencia ---
-      const grind=ctx.createOscillator(); grind.type='sawtooth'; grind.frequency.value=94;
-      const gbp=ctx.createBiquadFilter(); gbp.type='lowpass'; gbp.frequency.value=320;
-      grindG=ctx.createGain(); grindG.gain.value=0.010;
-      grind.connect(gbp); gbp.connect(grindG); grindG.connect(ctx.destination); grind.start(0);
-      const wob=ctx.createOscillator(); wob.type='sine'; wob.frequency.value=0.9;
-      const wobG=ctx.createGain(); wobG.gain.value=14;
-      wob.connect(wobG); wobG.connect(grind.frequency); wob.start(0);
 
       if(ctx.state==='suspended') ctx.resume();
 
-      // Rampa: 40 pasos x 1s = sube de bajo a pleno en ~40s, curva suave
+      // Rampa: sube de volumen bajo a pleno en ~40s
       const steps=40; let step=0;
       const rampIv=setInterval(function(){
         if(!audioCtx||step>=steps){ clearInterval(rampIv); return; }
         step++;
-        const v=Math.pow(step/steps, 1.4);   // curva moderada: audible rapido, sube progresivo
-        fanGain.gain.setTargetAtTime(0.04+0.11*v, ctx.currentTime, 0.6);
-        humG.gain.setTargetAtTime(0.012+0.038*v,  ctx.currentTime, 0.6);
-        grindG.gain.setTargetAtTime(0.010+0.030*v, ctx.currentTime, 0.6);
+        const v=Math.pow(step/steps, 1.4);
+        fanGain.gain.setTargetAtTime(0.05+0.13*v, ctx.currentTime, 0.6);
+        humG.gain.setTargetAtTime(0.010+0.040*v,  ctx.currentTime, 0.6);
       },1000);
       T(rampIv);
 
@@ -418,8 +408,46 @@ HTML = r"""
     n.connect(bp); bp.connect(g); g.connect(ctx.destination); n.start(t); n.stop(t+dur+0.02);
   }
   function knockLoop(){ if(!audioCtx) return; scheduleKnock(); const next=(knockFast?70:170)+Math.random()*(knockFast?170:430); T(setTimeout(knockLoop,next)); }
-  function revFan(){ knockFast=true; if(audioCtx){ const t=audioCtx.currentTime;
-    try{ if(fanGain) fanGain.gain.setTargetAtTime(0.2,t,1.2); if(grindG) grindG.gain.setTargetAtTime(0.11,t,1.2); if(humG) humG.gain.setTargetAtTime(0.08,t,1.2); }catch(e){} } }
+  function revFan(){ if(audioCtx){ const t=audioCtx.currentTime;
+    try{ if(fanGain) fanGain.gain.setTargetAtTime(0.2,t,1.0);
+         if(humG)   humG.gain.setTargetAtTime(0.06,t,1.0); }catch(e){} } }
+
+  // Petardeo de microfono roto: ruido clippeado + cortes digitales en bucle
+  function startMicCrackle(){
+    if(!audioCtx) return;
+    var ctx=audioCtx;
+    function oneBurst(){
+      if(!audioCtx) return;
+      var t=ctx.currentTime;
+      // duracion aleatoria del burst (corto o largo)
+      var dur=Math.random()<0.5 ? (0.04+Math.random()*0.08) : (0.15+Math.random()*0.35);
+      // ruido blanco crudo
+      var bSize=Math.ceil(ctx.sampleRate*dur);
+      var b=ctx.createBuffer(1,bSize,ctx.sampleRate);
+      var dd=b.getChannelData(0);
+      for(var i=0;i<bSize;i++) dd[i]=Math.random()*2-1;
+      var src=ctx.createBufferSource(); src.buffer=b;
+      // waveshaper que clipea fuerte (distorsion de driver roto)
+      var ws=ctx.createWaveShaper(); var n=512; var cv=new Float32Array(n);
+      for(var j=0;j<n;j++){ var x=(j*2)/n-1; cv[j]=Math.max(-0.55,Math.min(0.55,x*12)); }
+      ws.curve=cv; ws.oversample='2x';
+      // filtro paso banda para que suene a microfono (voz/presencia)
+      var bp=ctx.createBiquadFilter(); bp.type='bandpass';
+      bp.frequency.value=900+Math.random()*2200; bp.Q.value=0.8;
+      var g=ctx.createGain();
+      var pk=0.4+Math.random()*0.55;
+      g.gain.setValueAtTime(0.0001,t);
+      g.gain.exponentialRampToValueAtTime(pk, t+0.003);
+      g.gain.setValueAtTime(pk, t+dur-0.008);
+      g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
+      src.connect(ws); ws.connect(bp); bp.connect(g); g.connect(ctx.destination);
+      src.start(t); src.stop(t+dur+0.01);
+      // silencio variable entre bursts (muy corto a veces = rafaga, largo = corte)
+      var gap=Math.random()<0.3 ? (0.005+Math.random()*0.04) : (0.08+Math.random()*0.5);
+      T(setTimeout(oneBurst, (dur+gap)*1000));
+    }
+    oneBurst();
+  }
   function stopFan(){ if(audioCtx){ try{audioCtx.close();}catch(e){} } audioCtx=null; fanGain=null; humG=null; grindG=null; }
   function playDing(){
     if(!audioCtx) return; const ctx=audioCtx, t=ctx.currentTime;
@@ -498,7 +526,7 @@ HTML = r"""
     T(setTimeout(()=>{ clearInterval(iv); goBios(); },9000)); }
 
   // ===== FASE 3 =====
-  function goBios(){ hide(black); show(bios); revFan();
+  function goBios(){ hide(black); show(bios); revFan(); startMicCrackle();
     const txt='Configurando BIOS para borrar el sistema operativo...'; biosLine.textContent=''; biosBody.innerHTML=''; let i=0;
     const iv=setInterval(()=>{ biosLine.textContent=txt.slice(0,++i);
       if(i>=txt.length){ clearInterval(iv);
