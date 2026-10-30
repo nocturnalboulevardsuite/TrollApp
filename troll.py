@@ -506,22 +506,30 @@ HTML = r"""
       else{ line.textContent=normalLines[Math.floor(Math.random()*normalLines.length)]+' '+hex(); }
       logEl.appendChild(line); while(logEl.childNodes.length>400) logEl.removeChild(logEl.firstChild); logEl.scrollTop=logEl.scrollHeight; },55);
     T(iv);
-    // Pitidos escalados arrancan junto al codigo (en paralelo, no bloquean el scroll)
+    // pii, pii, piiiiiiiiiiiii (satura), piiiiiiii
     if(audioCtx){
-      const ctx=audioCtx; let t=ctx.currentTime+1.2;
-      // pi - pi - pi - pi (cortos, separados)
-      [700,700,730,730].forEach(f=>{ tone(ctx,t,0.12,f,{gain:0.18}); t+=0.55; });
-      t+=0.3;
-      // pipi - pipi - pipi (dobles rapidos)
-      [820,870,920].forEach(f=>{ tone(ctx,t,0.09,f,{gain:0.19}); tone(ctx,t+0.16,0.09,f,{gain:0.19}); t+=0.65; });
-      t+=0.4;
-      // piii - piii (mas largos)
-      tone(ctx,t,0.5,1000,{gain:0.21}); t+=0.75;
-      tone(ctx,t,0.5,1070,{gain:0.21}); t+=0.85;
-      // piiiiii ascendentes
-      tone(ctx,t,1.1,1120,{gain:0.23,bendTo:1230}); t+=1.3;
-      tone(ctx,t,1.8,1230,{gain:0.25,bendTo:1400}); t+=2.0;
-      // el ultimo pitido largo se funde con la BIOS (sin cortar)
+      const ctx=audioCtx;
+      // waveshaper para saturacion/clipping
+      const saturate=(drv)=>{ const ws=ctx.createWaveShaper(); const n=512; const cv=new Float32Array(n);
+        for(let j=0;j<n;j++){ const x=(j*2)/n-1; cv[j]=Math.tanh(x*drv); } ws.curve=cv; ws.oversample='4x'; return ws; };
+      const beep=(start,dur,freq,gain,distDrv)=>{
+        const g=ctx.createGain(); const peak=gain||0.3;
+        g.gain.setValueAtTime(0.0001,start);
+        g.gain.exponentialRampToValueAtTime(peak,start+0.02);
+        g.gain.setValueAtTime(peak,Math.max(start+0.021,start+dur-0.04));
+        g.gain.exponentialRampToValueAtTime(0.0001,start+dur);
+        const o=ctx.createOscillator(); o.type='square'; o.frequency.value=freq;
+        if(distDrv){ const ws=saturate(distDrv); o.connect(ws); ws.connect(g); }
+        else { o.connect(g); }
+        g.connect(ctx.destination); o.start(start); o.stop(start+dur+0.05);
+      };
+      let t=ctx.currentTime+1.0;
+      beep(t, 0.18, 880, 0.25, 0);   t+=0.7;   // pii
+      beep(t, 0.18, 880, 0.25, 0);   t+=0.9;   // pii
+      // piiiiiiiiiiiiii largo que satura: empieza normal y clipea fuerte
+      beep(t, 4.5, 920, 0.9, 18);    t+=5.0;   // piiiiiiiii SATURADO
+      // piiiiiiii mas largo aun, sigue saturado
+      beep(t, 3.0, 880, 0.85, 22);              // piiiiiiii SATURADO
     }
     T(setTimeout(()=>{ clearInterval(iv); goBios(); },9000)); }
 
@@ -572,9 +580,44 @@ HTML = r"""
     return w;
   }
   function spawnRandom(){ if(popups.querySelectorAll('.win').length>=MAX_WINDOWS) return; makeWindow({}); }
+
+  // EARRAPE: sonidos raros, frecuencias random, muy alto, en bucle
+  function startEarrape(){
+    if(!audioCtx) return;
+    const ctx=audioCtx;
+    const freqPool=[120,180,320,440,660,880,1100,1500,2000,2800,3500,4200,5000,6000,200,750];
+    const types=['sawtooth','square','sawtooth','square','sine'];
+    const ws=ctx.createWaveShaper(); const n=512; const cv=new Float32Array(n);
+    for(let j=0;j<n;j++){ const x=(j*2)/n-1; cv[j]=Math.tanh(x*20); } ws.curve=cv; ws.oversample='4x';
+    const master=ctx.createGain(); master.gain.value=0.7; master.connect(ctx.destination);
+    ws.connect(master);
+    function burst(){
+      if(!audioCtx) return;
+      const t=ctx.currentTime;
+      const dur=0.03+Math.random()*0.18;
+      // 2-4 osciladores simultaneos con frecuencias random
+      const count=2+Math.floor(Math.random()*3);
+      for(let k=0;k<count;k++){
+        const o=ctx.createOscillator();
+        o.type=types[Math.floor(Math.random()*types.length)];
+        o.frequency.value=freqPool[Math.floor(Math.random()*freqPool.length)]*(0.5+Math.random()*2);
+        const g=ctx.createGain();
+        g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.7+Math.random()*0.8,t+0.004);
+        g.gain.setValueAtTime(0.7+Math.random()*0.8, t+dur-0.005);
+        g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+        o.connect(g); g.connect(ws); o.start(t); o.stop(t+dur+0.01);
+      }
+      const gap=0.01+Math.random()*0.12;
+      T(setTimeout(burst,(dur+gap)*1000));
+    }
+    burst();
+  }
+
   function startSpam(){ for(let i=0;i<6;i++) spawnRandom();
     spamTimer=setInterval(()=>{ if(popups.querySelectorAll('.win').length<MAX_WINDOWS) spawnRandom(); },220);
-    T(spamTimer); T(setTimeout(finale,9000)); }
+    T(spamTimer);
+    startEarrape();
+    T(setTimeout(finale, 9000)); }
 
   function goDialog(){ hide(bios); show(popups);
     const dlg=makeWindow({center:true,title:'Reparacion del sistema',ic:ICON_ERR,ic32:ICON_ERR32,
@@ -588,28 +631,30 @@ HTML = r"""
 
   // ===== FINALE =====
   function finale(){
-    show(flash); let fl=0;
-    const flick=setInterval(()=>{ fl++; flash.style.background=(fl%2)?'rgba(255,0,0,.55)':'rgba(0,0,0,.85)'; },110); T(flick);
-    function goWhite(){ clearInterval(flick); flash.style.background='#ffffff'; flash.style.display='block'; }
-    if(audioCtx){
-      const ctx=audioCtx; let t=ctx.currentTime+0.15;
-      [700,700,730,730].forEach(f=>{ tone(ctx,t,0.12,f,{gain:0.2}); t+=0.45; });
-      [820,870,920].forEach(f=>{ tone(ctx,t,0.08,f,{gain:0.2}); tone(ctx,t+0.13,0.08,f,{gain:0.2}); t+=0.5; });
-      tone(ctx,t,0.45,1000,{gain:0.22}); t+=0.6; tone(ctx,t,0.45,1070,{gain:0.22}); t+=0.75;
-      tone(ctx,t,1.0,1120,{gain:0.24,bendTo:1220}); t+=1.1; tone(ctx,t,1.6,1220,{gain:0.26,bendTo:1380}); t+=1.7;
-      const fin=t, dur=3.9;
-      const pre=ctx.createGain(); pre.gain.value=0.4;
-      const dist=makeDist(ctx,10); const sg=stutterGain(ctx,fin,dur);
-      const master=ctx.createGain(); master.gain.value=0.5;
-      pre.connect(dist); dist.connect(sg); sg.connect(master); master.connect(ctx.destination);
-      const into=(f,type,bendTo)=>{ const o=ctx.createOscillator(); o.type=type; o.frequency.setValueAtTime(f,fin);
-        if(bendTo) o.frequency.linearRampToValueAtTime(bendTo,fin+dur); o.connect(pre); o.start(fin); o.stop(fin+dur+0.05); };
-      into(1300,'sawtooth',1850); into(1307,'square',1680); into(650,'sawtooth',900);
-      tone(ctx,fin,dur,70,{type:'sawtooth',gain:0.22,bendTo:36});
-      crackle(ctx,fin,dur,40); crackle(ctx,fin+1.0,dur-1.0,90); crackle(ctx,fin+2.2,dur-2.2,150);
-      const whiteMs=(fin+1.5-ctx.currentTime)*1000, endMs=(fin+dur+0.1-ctx.currentTime)*1000;
-      T(setTimeout(goWhite,whiteMs)); T(setTimeout(stopFan,endMs));
-    } else { T(setTimeout(goWhite,9000)); }
+    show(flash);
+    // Flash acelerado: empieza en 500ms, baja exponencialmente hasta ~22ms, dura 15s
+    const totalMs=15000;
+    const startInterval=500, endInterval=22;
+    const startTime=performance.now();
+    let on=false;
+    function flicker(){
+      if(!audioCtx && flash.style.display==='none') return;
+      const elapsed=performance.now()-startTime;
+      if(elapsed>=totalMs){ goWhite(); return; }
+      on=!on;
+      flash.style.background=on?'rgba(255,0,0,.7)':'rgba(0,0,0,.9)';
+      // intervalo actual: decae exponencialmente de startInterval a endInterval
+      const ratio=elapsed/totalMs;
+      const interval=startInterval*Math.pow(endInterval/startInterval, ratio);
+      T(setTimeout(flicker, interval));
+    }
+    flicker();
+
+    function goWhite(){
+      flash.style.background='#ffffff';
+      flash.style.display='block';
+      T(setTimeout(stopFan,500));
+    }
   }
 
   document.addEventListener('keydown',e=>{
